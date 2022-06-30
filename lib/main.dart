@@ -1,117 +1,260 @@
-import 'dart:html';
-
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:tuple/tuple.dart';
 
-void main() {
-  runApp(const MyApp());
+import 'firebase_options.dart';
+
+import 'utility.dart';
+import 'crossword.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(const Application());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+class Application extends StatelessWidget {
+  const Application({Key? key}) : super(key: key);
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'CTS Alpha',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
+        primarySwatch: createMaterialColor(const Color(0xFF5296A5)),
+        textTheme: GoogleFonts.poppinsTextTheme(),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MainPage()
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({Key? key, required this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class MainPage extends StatelessWidget {
+  const MainPage({Key? key}) : super(key: key);
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'CTS: alpha version',
+          style: TextStyle(
+            fontFamily: Theme.of(context).textTheme.headline1?.fontFamily,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            fontSize: 22,
+          ),
+        ),
+        toolbarHeight: 35,
+        centerTitle: true,
+        foregroundColor: Colors.white,
+      ),
+      body: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: const <Widget>[
+          Crossword(
+            cellSize: 18,
+            cellPadding: 2,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class Crossword extends StatefulWidget {
+  const Crossword({Key? key, required this.cellSize, required this.cellPadding}) : super(key: key);
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  final double cellSize;
+  final double cellPadding;
+
+  @override
+  State<Crossword> createState() => _CrosswordState();
+}
+
+class _CrosswordState extends State<Crossword> {
+  final List<List<String?>> _answerMatrix = getAnswerMatrix();
+  int cursorX = 0;
+  int cursorY = 0;
+  String _axis = 'n';
+
+  Widget _buildCell (String? value, double size, int x, int y) {
+    if (value == null) {
+      return SizedBox(
+        height: widget.cellSize,
+        width: widget.cellSize,
+      );
+    } else if (!(value.contains(RegExp(r'[0-9]')))) {
+      return Container(
+        height: widget.cellSize,
+        width: widget.cellSize,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: (cursorX == x && cursorY == y && _axis != 'n') ? const Color(0xFFFFC49C) : (value == '' ? const Color(0xFFFFEEDD) : const Color(0xFFb8b8ff)),
+          border: Border.all(
+            color: Colors.grey,
+            width: 1,
+          ),
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Text(
+          value,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+          ),
+        )
+      );
+    } else {
+      return InkWell(
+        onTap: () {
+          setState(() {
+            if (_answerMatrix[x][y + 1] == null) {
+              _axis = 'h';
+              cursorX = x + 1;
+              cursorY = y;
+            } else {
+              _axis = 'v';
+              cursorX = x;
+              cursorY = y + 1;
+            }
+          });
+        }, // Handle your callback
+        child: Ink(
+          height: widget.cellSize,
+          width: widget.cellSize,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFC49C),
+            border: Border.all(
+              color: Colors.grey,
+              width: 1
+            ),
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: Container(
+            height: widget.cellSize,
+            width: widget.cellSize,
+            alignment: Alignment.center,
+            child: Text(
+              value,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  List<TableRow> _buildTableRows(double size, double padding) {
+    List<TableRow> result = [];
+    var rowFlag = true;
+    var columnFlag = true;
+    for (var i = 0; i < _answerMatrix.length; i += 1) {
+      columnFlag = true;
+      if (rowFlag) {
+        List<Widget> rowChildren = [];
+        for (var j = 0; j < _answerMatrix[i].length; j += 1) {
+          if (columnFlag) {
+            rowChildren.add(_buildCell(_answerMatrix[i][j], size, i, j));
+            columnFlag = false;
+          } else {
+            rowChildren.add(SizedBox(width: padding));
+            j -= 1;
+            columnFlag = true;
+          }
+        }
+        result.add(TableRow(children: rowChildren));
+        rowFlag = false;
+      } else {
+        List<Widget> rowChildren = [];
+        var border = _answerMatrix[i].length * 2 - 1;
+        for (var j = 0; j < border; j += 1) {
+          rowChildren.add(SizedBox(height: padding));
+        }
+        result.add(TableRow(children: rowChildren));
+        i -= 1;
+        rowFlag = true;
+      }
+    }
+    return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+    return RawKeyboardListener(
+      focusNode: FocusNode(),
+      autofocus: true,
+      onKey: (input) => {
+        if (_axis != 'n' && input is RawKeyDownEvent) {
+          if ('abcdefghijklmnopqrstuvwxyz&'.contains(input.logicalKey.keyLabel.toLowerCase())) {
+            setState(() {
+              _answerMatrix[cursorX][cursorY] = input.logicalKey.keyLabel.toLowerCase();
+              if (_axis == 'h') {
+                if (_answerMatrix[cursorX + 1][cursorY] != null) {
+                  cursorX += 1;
+                } else {
+                  _axis = 'n';
+                }
+              } else {
+                if (_answerMatrix[cursorX][cursorY + 1] != null) {
+                  cursorY += 1;
+                } else {
+                  _axis = 'n';
+                }
+              }
+            })
+          } else if (input.logicalKey.keyLabel == 'Backspace') {
+            setState(() {
+              _answerMatrix[cursorX][cursorY] = '';
+              if (_axis == 'h') {
+                if (!positions.contains(Tuple2(cursorX - 1, cursorY))) {
+                  cursorX -= 1;
+                } else {
+                  _axis = 'n';
+                }
+              } else {
+                if (!positions.contains(Tuple2(cursorX, cursorY - 1))) {
+                  cursorY -= 1;
+                } else {
+                  _axis = 'n';
+                }
+              }
+            })
+          }
+        }
+      },
+      child: Table(
+        defaultColumnWidth: const IntrinsicColumnWidth(),
+        children: _buildTableRows(widget.cellSize, widget.cellPadding),
+      )
     );
   }
 }
+
+class CluesSection extends StatelessWidget {
+  const CluesSection({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 800,
+      width: 600,
+      child: ListView(
+        addAutomaticKeepAlives: true,
+        children: cookedClues
+      ),
+    );
+  }
+}
+
